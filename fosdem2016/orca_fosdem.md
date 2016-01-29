@@ -93,6 +93,9 @@ Minimum: 6.4 (Orca 1.5) -->
 
 # 1,000,000,000
 
+<!-- Expression pre-processing.
+Exploration Phase where logical transformation rules are fired in the cascade framework of query optimization -->
+
 ---
 # Many Logical transformations
 
@@ -124,15 +127,145 @@ Minimum: 6.4 (Orca 1.5) -->
 
 ---
 
-# Adding A Tranformation
+# Adding Transformations
+## Setup environment
+1. Install GPOS
+2. Install ORCA along with the patch Xerces
+3. Build GPDB or Apache Hawq with ORCA enabled
+4. Make sure `set optimizer=on;`
 
+<!-- All with the debug prefix -->
+
+---
+
+# Example
+## Split an aggregate into a pair of local and global aggregate.
+
+```SQL
+SELECT sum(c) FROM foo GROUP BY b
+
+CREATE TABLE foo (a int, b int, c int) distributed by (a);
+```
+
+<!-- Table is distributed by column a, however the aggregation operation is on column b. One option is to gather all tuples to the master node and compute the aggregation. The drawback of this approach is that the tuples need to gathered on the master node and therefore does not take advantage of being a distributed database system.
+An alternate design is to do local aggregation and then send the partial aggregation to the master. The final aggregation can then be done on the master. In the next section, we will walk through how to add such a logical to logical transformation rule inside Orca. -->
+
+---
+
+# `CXformSplitGbAgg`
+
+```c++
+// HEADER FILES
+~/git/orca/libgpopt/include/gpopt/xforms
+
+// SOURCE FILES
+~/git/orca/libgpopt/src/xforms
+```
+
+---
+
+# Pattern
+
+
+```c++
+GPOS_NEW(pmp)
+CExpression
+(
+	pmp,
+	GPOS_NEW(pmp) CLogicalGbAgg(pmp),
+  // logical aggregate operator
+	GPOS_NEW(pmp) CExpression(pmp, GPOS_NEW(pmp) CPatternLeaf(pmp)),
+  // relational child
+	GPOS_NEW(pmp) CExpression(pmp, GPOS_NEW(pmp) CPatternTree(pmp))  
+  // scalar project list
+	));
+```
+
+<!-- The constructor of each Xform must specify what kind of tree patterns that a transformation rule can be fired on.
+
+The above pattern states that the Xform for splitting aggregation is applied when the engine sees an expression that has the following properties:
+Logical aggregate operators
+Has a relational child
+Has a scalar child for the project list (aggregate function such as sum(b) in our running example) -->
+
+---
+
+# Pre-condition Check
+
+```c++
+// Compatibility function for splitting aggregates
+virtual
+BOOL FCompatible(CXform::EXformId exfid){
+	return (CXform::ExfSplitGbAgg != exfid);}
+```
+
+---
+
+# Pre-condition Check (2)
+
+```c++
+// Compute xform promise for a given expression handle;
+EXformPromise Exfp(CExpressionHandle &exprhdl) const
+```
+
+---
+
+# The Actual Transformation
+
+```c++
+void Transform
+	(
+	CXformContext *pxfctxt,
+	CXformResult *pxfres,
+	CExpression *pexpr
+	) const;
+```
+
+<!-- Each Xform must  implement the Transform API that takes as input the input logical/physical expression CExpression *pexpr and the transformation context CXformContext *pxfctxt to generate one or more output expressions CXformResult *pxfres. In our running example we take as input the global aggregate and generate as output another expression tree that has a local and global aggregate operations. -->
+
+---
+
+# Register Transformation
+
+```c++
+void CXformFactory::Instantiate()
+{
+….
+Add(GPOS_NEW(m_pmp) CXformSplitGbAgg(m_pmp));
+….
+}
+```
 
 ---
 
 # What can't it do?
 
+---
+
+# Right
+![filter](/Users/pivotal/Dropbox/presentations/fosdem2016/findingBalance.gif)
+# Balance
+
+---
+
+## Improved performance for short running queries
+
+---
+
+# Not yet feature complete
+
+- External parameters
+- Cubes
+- Multiple grouping sets
+- Inverse distribution functions
+- Ordered aggregates
+- Indexed expressions
 
 
+---
+
+# PostgreSQL
+![](/Users/pivotal/Dropbox/presentations/fosdem2016/postgres.png)
 
 ---
 
