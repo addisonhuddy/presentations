@@ -261,7 +261,6 @@ Add(GPOS_NEW(m_pmp) CXformSplitGbAgg(m_pmp));
 - Ordered aggregates
 - Indexed expressions
 
-
 ---
 
 # PostgreSQL
