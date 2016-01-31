@@ -1,5 +1,5 @@
 # ORCA
-## A modular approach to query optimizer
+## Query optimization as a service
 
 #### @addisonhuddy
 
@@ -9,28 +9,9 @@
 - Little about query optimization
 - Introduce ORCA
 - ORCA Internals
-- ORCA Roadmap
 - Example: adding a transformation
+- ORCA Roadmap
 
----
-
-# What it's all about
-
-```sql
-PREPARE query(int, int) AS SELECT sum(bar) FROM test
-    WHERE id > $1 AND id < $2
-    GROUP BY foo;
-
-EXPLAIN ANALYZE EXECUTE query(100, 200);
-
-                                                       QUERY PLAN
--------------------------------------------------------------------------------------------------------------------------
- HashAggregate  (cost=39.53..39.53 rows=1 width=8) (actual time=0.661..0.672 rows=7 loops=1)
-   ->  Index Scan using test_pkey on test  (cost=0.00..32.97 rows=1311 width=8) (actual time=0.050..0.395 rows=99 loops=1)
-         Index Cond: ((id > $1) AND (id < $2))
- Total runtime: 0.851 ms
-(4 rows)
-```
 ---
 
 # Why care about query optimization?
@@ -38,7 +19,6 @@ EXPLAIN ANALYZE EXECUTE query(100, 200);
 * Turns queries (SQL, MapReduce, ...) into an execution plan
 * Data growth > Processing growth
 * So many optimizers!
-* Combination of NP-hard optimization problems
 
 ---
 
@@ -78,36 +58,6 @@ Minimum: 6.4 (Orca 1.5) -->
 
 ![](/Users/pivotal/Dropbox/presentations/fosdem2016/multiply.gif)
 
-## Logical & || Physical Operators
-
----
-
-## Pre-processing -> Exploration -> Implementation -> Optimization
-
-> ALL possible logical plans into its physical operators
-- Dr. Venkatesh "Venky" Raghavan
-
-<!-- The logical and physical operators describe how a query or update was executed. The physical operators describe the physical implementation algorithm used to process a statement, for example, scanning a clustered index. Each step in the execution of a query or update statement involves a physical operator. The logical operators describe the relational algebraic operation used to process a statement, for example, performing an aggregation. Not all steps used to process a query or update involve logical operations. -->
-
----
-
-# 1,000,000,000
-
-<!-- Expression pre-processing.
-Exploration Phase where logical transformation rules are fired in the cascade framework of query optimization -->
-
----
-# Many Logical transformations
-
-- Join Ordering Algorithm
-- Expand NAry Join
-- Expand NAry Join Min Card Algorithm
-- Expand NAry Join Dynamic Programming
-- Select to Filter
-- Select to IndexGet
-- Simplify Select With Subquery
-
-## +76 more from what I could count on the plane
 
 ---
 
@@ -122,19 +72,42 @@ Exploration Phase where logical transformation rules are fired in the cascade fr
 
 ---
 
-<!-- Internals Overview -->
-![fit](/Users/pivotal/Dropbox/presentations/fosdem2016/orcaInternals.png)
+## Logical & || Physical Operators
 
 ---
 
-# Adding Transformations
-## Setup environment
-1. Install GPOS
-2. Install ORCA along with the patch Xerces
-3. Build GPDB or Apache Hawq with ORCA enabled
-4. Make sure `set optimizer=on;`
+## Pre-processing -> Exploration -> Implementation -> Optimization
 
-<!-- All with the debug prefix -->
+> ALL possible logical plans are turned into its physical operators
+- Dr. Venkatesh "Venky" Raghavan
+
+<!-- The logical and physical operators describe how a query or update was executed. The physical operators describe the physical implementation algorithm used to process a statement, for example, scanning a clustered index. Each step in the execution of a query or update statement involves a physical operator. The logical operators describe the relational algebraic operation used to process a statement, for example, performing an aggregation. Not all steps used to process a query or update involve logical operations. -->
+
+<!-- cascade framework -->
+
+---
+
+# 1,000,000,000
+
+<!-- Expression pre-processing.
+Exploration Phase where logical transformation rules are fired in the cascade framework of query optimization -->
+
+---
+# Many Logical transformations
+
+- Join Ordering Algorithm
+- Expand NAry Join Min Card Algorithm
+- Expand NAry Join Dynamic Programming
+- Select to Filter
+- Select to IndexGet
+- Simplify Select With Subquery
+
+## +77 more from what I could count on the plane
+
+---
+
+<!-- Internals Overview -->
+![fit](/Users/pivotal/Dropbox/presentations/fosdem2016/orcaInternals.png)
 
 ---
 
@@ -156,10 +129,10 @@ An alternate design is to do local aggregation and then send the partial aggrega
 
 ```c++
 // HEADER FILES
-~/git/orca/libgpopt/include/gpopt/xforms
+~/orca/libgpopt/include/gpopt/xforms
 
 // SOURCE FILES
-~/git/orca/libgpopt/src/xforms
+~/orca/libgpopt/src/xforms
 ```
 
 ---
@@ -190,6 +163,29 @@ Has a scalar child for the project list (aggregate function such as sum(b) in ou
 
 ---
 
+# What?
+
+```SQL
+...
+->  Redistribute Motion 2:2  (slice1; segments: 2)  (cost=0.00..431.00 rows=1 width=12)
+			Hash Key: b
+			Rows out:  Avg 1.5 rows x 2 workers at destination.  Max 2 rows (seg0) with 1.105 ms to end, start offset by 15 ms.
+			->  Result  (cost=0.00..431.00 rows=1 width=12)
+						Rows out:  Avg 1.5 rows x 2 workers.  Max 2 rows (seg1) with 0.273 ms to first row, 0.276 ms to end, start offset by 16 ms.
+						->  GroupAggregate  (cost=0.00..431.00 rows=1 width=12)
+									Group By: b
+									Rows out:  Avg 1.5 rows x 2 workers.  Max 2 rows (seg1) with 0.272 ms to first row, 0.275 ms to end, start offset by 16 ms.
+									->  Sort  (cost=0.00..431.00 rows=1 width=8)
+												Sort Key: b
+												Rows out:  Avg 1.5 rows x 2 workers.  Max 2 rows (seg1) with 0.260 ms to first row, 0.262 ms to end, start offset by 16 ms.
+												Executor memory:  58K bytes avg, 58K bytes max (seg0).
+												Work_mem used:  58K bytes avg, 58K bytes max (seg0). Workfile: (0 spilling, 0 reused)
+												->  Table Scan on foo2  (cost=0.00..431.00 rows=1 width=8)
+															Rows out:  Avg 1.5 rows x 2 workers.  Max 2 rows (seg1) with 0.074 ms to first row, 0.075 ms to end, start offset by 16 ms.
+```
+
+---
+
 # Pre-condition Check
 
 ```c++
@@ -197,15 +193,6 @@ Has a scalar child for the project list (aggregate function such as sum(b) in ou
 virtual
 BOOL FCompatible(CXform::EXformId exfid){
 	return (CXform::ExfSplitGbAgg != exfid);}
-```
-
----
-
-# Pre-condition Check (2)
-
-```c++
-// Compute xform promise for a given expression handle;
-EXformPromise Exfp(CExpressionHandle &exprhdl) const
 ```
 
 ---
@@ -268,7 +255,7 @@ Add(GPOS_NEW(m_pmp) CXformSplitGbAgg(m_pmp));
 
 ---
 
-# Four pieces of hanging fruit
+# Four pieces of low hanging fruit
 
 1. Distinguish between Physical and Logical
 1. Move expression evaluation inside ORCA
