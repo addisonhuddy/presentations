@@ -9,7 +9,7 @@
 - Little about query optimization
 - Introduce ORCA
 - ORCA Internals
-- Example: adding a transformation
+- Pairing: adding a transformation
 - ORCA Roadmap
 
 ---
@@ -87,12 +87,6 @@ Minimum: 6.4 (Orca 1.5) -->
 
 ---
 
-# 1,000,000,000
-
-<!-- Expression pre-processing.
-Exploration Phase where logical transformation rules are fired in the cascade framework of query optimization -->
-
----
 # Many Logical transformations
 
 - Join Ordering Algorithm
@@ -106,12 +100,22 @@ Exploration Phase where logical transformation rules are fired in the cascade fr
 
 ---
 
+# 1,000,000,000
+
+<!-- Expression pre-processing.
+Exploration Phase where logical transformation rules are fired in the cascade framework of query optimization -->
+
+---
+
 <!-- Internals Overview -->
 ![fit](/Users/pivotal/Dropbox/presentations/fosdem2016/orcaInternals.png)
 
 ---
 
-# Example
+# Let's Pair
+
+---
+# Idea
 ## Split an aggregate into a pair of local and global aggregate.
 
 ```SQL
@@ -272,3 +276,9 @@ Add(GPOS_NEW(m_pmp) CXformSplitGbAgg(m_pmp));
 ### Pivotal Tracker: bit.ly/1m1WGDn
 ### White Paper: bit.ly/1ntrE8v
 ### @addisonhuddy
+
+---
+
+# Slides
+
+### Slides: github.com/addisonhuddy/presentations
